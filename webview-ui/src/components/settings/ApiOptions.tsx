@@ -725,6 +725,14 @@ const ApiOptions = ({
 							</>
 						)}
 					</p>
+
+					<VSCodeTextField
+						value={apiConfiguration?.awsBedrockAppInfProfileArn || ""}
+						style={{ width: "100%" }}
+						onInput={handleInputChange("awsBedrockAppInfProfileArn")}
+						placeholder="Application Inference Profile ARN (optional)">
+						<span style={{ fontWeight: 500 }}>Application Inference Profile ARN</span>
+					</VSCodeTextField>
 				</div>
 			)}
 

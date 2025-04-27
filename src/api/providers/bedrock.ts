@@ -52,8 +52,11 @@ export class AwsBedrockHandler implements ApiHandler {
 		// initialization, and allowing for session renewal if necessary as well
 		const client = await this.getAnthropicClient()
 
+		// Use provisioned ARN if available, otherwise use the derived modelId
+		const finalModelId = this.options.awsBedrockAppInfProfileArn || modelId
+
 		const stream = await client.messages.create({
-			model: modelId,
+			model: finalModelId, // Use the finalModelId here
 			max_tokens: model.info.maxTokens || 8192,
 			thinking: reasoningOn ? { type: "enabled", budget_tokens: budget_tokens } : undefined,
 			temperature: reasoningOn ? undefined : 0,
@@ -246,24 +249,31 @@ export class AwsBedrockHandler implements ApiHandler {
 	}
 
 	/**
-	 * Gets the appropriate model ID, accounting for cross-region inference if enabled
+	 * Gets the appropriate model ID, accounting for provisioned throughput ARN or cross-region inference if enabled
 	 */
 	async getModelId(): Promise<string> {
+		// Prioritize the provisioned throughput ARN if provided
+		if (this.options.awsBedrockAppInfProfileArn) {
+			return this.options.awsBedrockAppInfProfileArn
+		}
+
+		// Fallback to standard model ID construction with optional cross-region prefix
+		const baseModelId = this.getModel().id
 		if (this.options.awsUseCrossRegionInference) {
 			const regionPrefix = this.getRegion().slice(0, 3)
 			switch (regionPrefix) {
 				case "us-":
-					return `us.${this.getModel().id}`
+					return `us.${baseModelId}`
 				case "eu-":
-					return `eu.${this.getModel().id}`
+					return `eu.${baseModelId}`
 				case "ap-":
-					return `apac.${this.getModel().id}`
+					return `apac.${baseModelId}`
 				default:
-					// cross region inference is not supported in this region, falling back to default model
-					return this.getModel().id
+					// cross region inference is not supported in this region, falling back to base model ID
+					return baseModelId
 			}
 		}
-		return this.getModel().id
+		return baseModelId
 	}
 
 	private static async withTempEnv<R>(updateEnv: () => void, fn: () => Promise<R>): Promise<R> {
@@ -298,9 +308,12 @@ export class AwsBedrockHandler implements ApiHandler {
 		// Format prompt for DeepSeek R1 according to documentation
 		const formattedPrompt = this.formatDeepseekR1Prompt(systemPrompt, messages)
 
+		// Use provisioned ARN if available, otherwise use the derived modelId passed to the function
+		const finalModelId = this.options.awsBedrockAppInfProfileArn || modelId
+
 		// Prepare the request based on DeepSeek R1's expected format
 		const command = new InvokeModelWithResponseStreamCommand({
-			modelId: modelId,
+			modelId: finalModelId, // Use the finalModelId here
 			contentType: "application/json",
 			accept: "application/json",
 			body: JSON.stringify({
@@ -490,9 +503,12 @@ export class AwsBedrockHandler implements ApiHandler {
 		// Format messages for Nova model
 		const formattedMessages = this.formatNovaMessages(messages)
 
+		// Use provisioned ARN if available, otherwise use the derived modelId passed to the function
+		const finalModelId = this.options.awsBedrockAppInfProfileArn || modelId
+
 		// Prepare request for Nova model
 		const command = new ConverseStreamCommand({
-			modelId: modelId,
+			modelId: finalModelId, // Use the finalModelId here
 			messages: formattedMessages,
 			system: systemPrompt ? [{ text: systemPrompt }] : undefined,
 			inferenceConfig: {
